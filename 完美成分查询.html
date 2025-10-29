@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>完美查成分</title>
+    <title>完美查成分平台</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
     
-    <!-- 配置Tailwind自定义主题 -->
+    <!-- 配置自定义主题 -->
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -170,6 +170,8 @@
                                     <p><span class="text-gray-500 dark:text-gray-400">完美昵称：</span><span class="pvp-nickname font-medium"></span></p>
                                     <p><span class="text-gray-500 dark:text-gray-400">App昵称：</span><span class="app-nickname"></span></p>
                                     <p><span class="text-gray-500 dark:text-gray-400">SteamID：</span><span class="steam-id font-mono text-sm"></span></p>
+                                    <!-- 新增状态显示行 -->
+                                    <p><span class="text-gray-500 dark:text-gray-400">状态：</span><span class="online-status"><i class="fa fa-circle-o-notch fa-spin"></i> 加载中...</span></p>
                                 </div>
                             </div>
                             <button class="detail-btn bg-secondary hover:bg-secondary/90 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1">
@@ -280,7 +282,7 @@
     </template>
 
     <script>
-        // 模式字典映射
+        // 模式映射
         const modeDict = {
             "全部模式": -1, 
             "天梯组排": -12, 
@@ -292,6 +294,7 @@
 
         // API 地址配置
         const API_URLS = {
+            getInGameUserSetBySid:"https://appactivity.wmpvp.com/steamcn/app/realtime/getInGameUserSetBySid?steamIds=",
             SEARCH: "https://appengine.wmpvp.com/steamcn/app/search/user",
             ACCOUNTS: "https://appengine.wmpvp.com/steamcn/community/user/getNewUserList",
             FORBID: "https://api.wmpvp.com/api/csgo/home/user/forbid",
@@ -303,7 +306,7 @@
             STEAM_DATA: "https://steamrepcn.com/profiles/"
         };
 
-        // 模拟用户数据（实际应用中应该从后端获取）
+        // 公用测试用户数据方便调用API
         const mockUserData = [
             {
                 'steamID': '76561199635543601', 
@@ -464,6 +467,37 @@
             }
             
             return maxScore;
+        }
+
+        // 新增：获取在线状态
+        async function getOnlineStatus(steamId) {
+            if (!steamId || ["N/A", "未知", ""].includes(steamId.toString().trim())) {
+                return { online: false, duration: 0 };
+            }
+            
+            try {
+                const response = await fetch(`${API_URLS.getInGameUserSetBySid}${steamId}`, {
+                    method: "GET",
+                    headers: getHeaders()
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.code === 1 && data.result) {
+                    const isOnline = data.result.idSet && data.result.idSet.includes(steamId);
+                    const duration = data.result.userRealTimeMap?.[steamId] || 0;
+                    return { online: isOnline, duration };
+                }
+                
+                return { online: false, duration: 0 };
+            } catch (e) {
+                console.error("获取在线状态错误:", e);
+                return { online: false, duration: 0 };
+            }
         }
 
         // API 调用函数 - 搜索用户
@@ -750,7 +784,7 @@
             try {
                 const steamId = account.steamId || 'N/A';
                 
-                // 并行获取数据以提高性能
+                // 获取数据
                 const [
                     statsInfo,
                     officialInfo,
@@ -833,6 +867,20 @@
             } else {
                 avatarPlaceholder.style.display = 'flex';
             }
+
+            // 新增：加载并显示在线状态
+            const statusEl = card.querySelector('.online-status');
+            const steamId = userData.steam_id;
+            
+            getOnlineStatus(steamId).then(status => {
+                if (status.online) {
+                    // 计算游戏时长
+
+                    statusEl.innerHTML = `<i class="fa fa-circle text-green-500"></i> 在线游戏中 (${status.duration})排`;
+                } else {
+                    statusEl.innerHTML = `<i class="fa fa-circle text-red-500"></i> 这B人离线中`;
+                }
+            });
             
             // 绑定详情按钮事件
             const detailBtn = card.querySelector('.detail-btn');
